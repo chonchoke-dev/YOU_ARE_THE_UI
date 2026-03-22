@@ -271,9 +271,26 @@
             transition: 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
         }
 
+        /* Stars & Results */
+        .stars-container {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .star {
+            font-size: 3.5rem;
+            color: #ccc;
+            opacity: 0.3;
+            transform: scale(0.8);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
         .star.filled {
             color: #f1c40f;
-            transform: scale(1);
+            opacity: 1;
+            transform: scale(1.1) rotate(5deg);
+            text-shadow: 0 0 15px rgba(241, 196, 15, 0.5);
         }
 
         #shield-aura {
@@ -286,6 +303,63 @@
             display: none;
             pointer-events: none;
             animation: breathe 2s infinite;
+        }
+
+        /* Start Screen & Modes */
+        .mode-btn {
+            background: white;
+            border: 3px solid #2c3e50;
+            padding: 15px 25px;
+            font-family: inherit;
+            font-size: 1.2rem;
+            cursor: pointer;
+            border-radius: 15px 5px 12px 8px;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            width: 250px;
+            text-align: left;
+            margin-bottom: 10px;
+            box-shadow: 4px 4px 0 #2c3e50;
+        }
+
+        .mode-btn:hover {
+            transform: scale(1.05) translate(-2px, -2px);
+            box-shadow: 6px 6px 0 #2c3e50;
+        }
+
+        .mode-btn small {
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+
+        .classic-btn { border-color: #2c3e50; }
+        .zen-btn { border-color: #4ecdc4; color: #1a7b75; }
+        .hard-btn { border-color: #ff4757; color: #c0392b; }
+
+        #start-screen {
+            display: flex;
+            z-index: 200;
+        }
+
+        #start-screen h1 {
+            font-size: 4rem;
+            margin-bottom: 10px;
+            color: #2c3e50;
+            transform: rotate(-2deg);
+            text-shadow: 3px 3px 0px rgba(0,0,0,0.05);
+        }
+
+        .best-label {
+            font-size: 1rem;
+            margin-bottom: 30px;
+            opacity: 0.8;
+            font-weight: bold;
+        }
+
+        .overlay h1 {
+            margin-bottom: 10px;
         }
 
         .overlay h2 {
@@ -362,9 +436,9 @@
             <div id="timer-bar"></div>
         </div>
 
-        <div id="instructions" style="top: 100px;">
+        <div id="instructions" style="top: 100px; display: none;">
             <h1>The Button That Could</h1>
-            <p id="best-score-label">Best: 0</p>
+            <p id="best-score-label">Record: LVL 1</p>
         </div>
 
         <div id="obstacles-container"></div>
@@ -380,10 +454,27 @@
         </div>
 
         <!-- Overlays -->
+        <div id="start-screen" class="overlay" style="display: flex;">
+            <h1>The Button<br>That Could</h1>
+            <p id="overall-best" class="best-label">Select Your Challenge</p>
+            <button class="mode-btn classic-btn" onclick="startGame('classic')">
+                <b>CLASSIC RUN</b>
+                <small>Balanced challenge with rewards.</small>
+            </button>
+            <button class="mode-btn zen-btn" onclick="startGame('zen')">
+                <b>ZEN MODE</b>
+                <small>No timer. Just relax and drag.</small>
+            </button>
+            <button class="mode-btn hard-btn" onclick="startGame('hard')">
+                <b>HARDCORE</b>
+                <small>Fast hazards. No shields. High stakes.</small>
+            </button>
+        </div>
+
         <div id="game-over" class="overlay">
-            <h2 id="over-title" style="color: #ff4757;">OOPS!</h2>
-            <p id="game-over-msg" style="font-size: 1.5rem; margin-bottom: 2rem;">You hit the wall...</p>
-            <button class="restart-btn" onclick="restartGame()">Try Again?</button>
+            <h2 id="over-title" style="color: #ff4757;">CRASH!</h2>
+            <p id="game-over-msg" style="font-size: 1.5rem; margin-bottom: 2rem; text-align: center;"></p>
+            <button class="restart-btn" onclick="showStartScreen()">Main Menu</button>
         </div>
 
         <div id="game-clear" class="overlay">
@@ -397,7 +488,7 @@
             <p id="level-score-msg" style="font-size: 1.2rem; margin-bottom: 2rem;"></p>
             <div style="display: flex; gap: 10px;">
                 <button id="next-level-btn" class="restart-btn" onclick="nextLevel()">Next Level</button>
-                <button id="final-restart-btn" class="restart-btn" style="display: none;" onclick="resetToLevelOne()">Play Again</button>
+                <button class="restart-btn" style="background: #eee; border-color: #ccc; color: #777;" onclick="showStartScreen()">Menu</button>
             </div>
         </div>
     </div>
@@ -410,19 +501,23 @@
         const container = document.getElementById('game-container');
         const gameOverOverlay = document.getElementById('game-over');
         const gameClearOverlay = document.getElementById('game-clear');
+        const startScreen = document.getElementById('start-screen');
         const levelIndicator = document.getElementById('level-indicator');
         const scoreDisplay = document.getElementById('score-display');
         const timerBar = document.getElementById('timer-bar');
-        const bestScoreLabel = document.getElementById('best-score-label');
+        const timerContainer = document.getElementById('timer-container');
+        const bestScoreLabel = document.getElementById('overall-best');
         const shieldAura = document.getElementById('shield-aura');
         const vignette = document.getElementById('vignette');
 
         let isDragging = false;
         let isGameOver = false;
+        let isStarted = false;
+        let currentGameMode = 'classic';
         let currentLevel = 1;
         let score = 0;
-        let bestScore = 0;
-        let bestLevel = 1;
+        let records = JSON.parse(localStorage.getItem('btn_records') || '{"classic":1, "zen":1, "hard":1}');
+        
         let timeLeft = 15;
         let totalTime = 15;
         let invincibleTime = 0;
@@ -434,26 +529,40 @@
         let animationFrameId;
         let lastTime = 0;
 
+        function updateBestDisplay() {
+            bestScoreLabel.innerHTML = `Best Levels - Classic: ${records.classic} | Zen: ${records.zen} | Hard: ${records.hard}`;
+        }
+        updateBestDisplay();
+
         // Procedural Level Generator
-        function generateLevel(n) {
-            const time = Math.max(7, 15 - Math.floor(n / 8));
-            const obsCount = 2 + Math.floor(n / 3); // More obstacles earlier
-            const speedBase = 1.0 + (n * 0.15);
+        function generateLevel(n, mode) {
+            let time = Math.max(7, 15 - Math.floor(n / 8));
+            let obsCount = 2 + Math.floor(n / 3);
+            let speedBase = 1.0 + (n * 0.15);
+            let itemChance = 0.4;
+
+            if (mode === 'zen') {
+                time = 999; 
+                speedBase *= 0.7;
+            } else if (mode === 'hard') {
+                time = Math.max(5, 10 - Math.floor(n / 10));
+                speedBase *= 1.4;
+                obsCount += 1;
+                itemChance = 0.2;
+            }
+
             const obs = [];
             const itemsList = [];
-
             const playerSpawnX = 10;
             const playerSpawnY = 10;
 
             for (let i = 0; i < obsCount; i++) {
                 const typeRoll = Math.random();
                 let type = 'static';
-                // More variety earlier
                 if (n >= 1 && typeRoll > 0.6) type = 'spinning';
                 if (n >= 2 && typeRoll > 0.8) type = 'moving';
                 if (n >= 4 && typeRoll > 0.9) type = 'homing';
 
-                // Ensure distance from player spawn (10, 10)
                 let x, y;
                 let attempts = 0;
                 do {
@@ -463,8 +572,7 @@
                 } while (Math.hypot(x - playerSpawnX, y - playerSpawnY) < 25 && attempts < 20);
 
                 obs.push({
-                    x: x,
-                    y: y,
+                    x: x, y: y,
                     w: 40 + Math.random() * 120,
                     h: 15 + Math.random() * 40,
                     rot: Math.random() * 360,
@@ -474,10 +582,9 @@
                 });
             }
 
-            // Power-ups
-            if (Math.random() > 0.4) {
+            if (Math.random() < itemChance) {
                 const itemTypes = ['time', 'diamond'];
-                if (n > 2) itemTypes.push('shield');
+                if (n > 2 && mode !== 'hard') itemTypes.push('shield');
                 itemsList.push({
                     x: playerSpawnX + 15 + Math.random() * 60,
                     y: playerSpawnY + 15 + Math.random() * 60,
@@ -491,7 +598,7 @@
         function createObstacles() {
             obstaclesContainer.innerHTML = '';
             obstacles = [];
-            const config = generateLevel(currentLevel);
+            const config = generateLevel(currentLevel, currentGameMode);
             totalTime = config.t;
             timeLeft = config.t;
             
@@ -530,15 +637,13 @@
             const delta = (timestamp - lastTime) / 1000;
             lastTime = timestamp;
 
-            if (!isGameOver) {
+            if (isStarted && !isGameOver) {
                 if (invincibleTime > 0) {
                     invincibleTime -= delta;
-                    if (invincibleTime <= 0) {
-                        player.classList.remove('invincible');
-                    }
+                    if (invincibleTime <= 0) player.classList.remove('invincible');
                 }
 
-                if (isDragging) {
+                if (isDragging && currentGameMode !== 'zen') {
                     timeLeft -= delta;
                     if (timeLeft <= 0) endGame('timeout');
                     updateTimerUI();
@@ -604,6 +709,7 @@
                 shieldAura.style.display = 'block';
             } else if (type === 'time') {
                 timeLeft = Math.min(totalTime, timeLeft + 4);
+                updateTimerUI();
             } else if (type === 'diamond') {
                 score += 1000;
                 scoreDisplay.innerText = `SCORE: ${Math.floor(score)}`;
@@ -634,6 +740,10 @@
         }
 
         function updateVignette() {
+            if (currentGameMode === 'zen') {
+                vignette.style.boxShadow = 'none';
+                return;
+            }
             const perc = (timeLeft / totalTime);
             if (perc < 0.4) {
                 const intensity = (0.4 - perc) * 250;
@@ -644,28 +754,50 @@
         }
 
         function updateTimerUI() {
+            if (currentGameMode === 'zen') {
+                timerContainer.style.display = 'none';
+                return;
+            }
+            timerContainer.style.display = 'block';
             const percentage = (timeLeft / totalTime) * 100;
             timerBar.style.width = `${percentage}%`;
             if (percentage < 30) timerBar.classList.add('timer-low');
             else timerBar.classList.remove('timer-low');
         }
 
+        function startGame(mode) {
+            currentGameMode = mode;
+            currentLevel = 1;
+            score = 0;
+            isStarted = true;
+            startScreen.style.display = 'none';
+            init();
+        }
+
+        function showStartScreen() {
+            isStarted = false;
+            isGameOver = false;
+            gameOverOverlay.style.display = 'none';
+            gameClearOverlay.style.display = 'none';
+            startScreen.style.display = 'flex';
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            updateBestDisplay();
+        }
+
         function init() {
             isGameOver = false;
             hasShield = false;
-            invincibleTime = 1.5; // Longer grace period
-            player.classList.add('invincible');
+            invincibleTime = 0; // Immediate start
+            player.classList.remove('invincible');
             shieldAura.style.display = 'none';
             gameOverOverlay.style.display = 'none';
             gameClearOverlay.style.display = 'none';
             levelIndicator.innerText = `LVL ${currentLevel}`;
             scoreDisplay.innerText = `SCORE: ${Math.floor(score)}`;
             
-            // Background shift
             const hue = (currentLevel * 40) % 360;
             container.style.backgroundColor = `hsl(${hue}, 30%, 95%)`;
 
-            // Reset player position FIRST
             player.style.left = '10%';
             player.style.top = '10%';
             player.style.backgroundColor = 'var(--accent-color)';
@@ -682,27 +814,38 @@
             lastTime = 0;
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
             animationFrameId = requestAnimationFrame(update);
-
-            document.getElementById('next-level-btn').style.display = 'block';
-            document.getElementById('final-restart-btn').style.display = 'none';
         }
 
         function checkCollision() {
             const playerRect = player.getBoundingClientRect();
             const goalRect = goal.getBoundingClientRect();
 
+            // Fair Hitbox: Shrink the player's detection area by 25%
+            const paddingW = playerRect.width * 0.25;
+            const paddingH = playerRect.height * 0.25;
+            const fairPlayer = {
+                left: playerRect.left + paddingW,
+                right: playerRect.right - paddingW,
+                top: playerRect.top + paddingH,
+                bottom: playerRect.bottom - paddingH
+            };
+
             for (let obs of obstacles) {
                 const obsRect = obs.el.getBoundingClientRect();
+                // Subtly shrink obstacle hitbox for better "feel"
+                const obsPadding = 5;
                 if (
-                    playerRect.left < obsRect.right && playerRect.right > obsRect.left &&
-                    playerRect.top < obsRect.bottom && playerRect.bottom > obsRect.top
+                    fairPlayer.left < obsRect.right - obsPadding && 
+                    fairPlayer.right > obsRect.left + obsPadding &&
+                    fairPlayer.top < obsRect.bottom - obsPadding && 
+                    fairPlayer.bottom > obsRect.top + obsPadding
                 ) {
                     if (hasShield) {
                         hasShield = false;
                         shieldAura.style.display = 'none';
                         container.style.animation = 'shake 0.4s';
                         setTimeout(() => container.style.animation = '', 400);
-                        obs.x -= 10; // Bump obstacle away
+                        obs.x -= 10;
                         return;
                     }
                     endGame('over');
@@ -710,10 +853,10 @@
                 }
             }
 
-            const playerCenterX = playerRect.left + playerRect.width / 2;
-            const playerCenterY = playerRect.top + playerRect.height / 2;
-            if (playerCenterX > goalRect.left && playerCenterX < goalRect.right &&
-                playerCenterY > goalRect.top && playerCenterY < goalRect.bottom) {
+            const pCX = playerRect.left + playerRect.width / 2;
+            const pCY = playerRect.top + playerRect.height / 2;
+            if (pCX > goalRect.left && pCX < goalRect.right &&
+                pCY > goalRect.top && pCY < goalRect.bottom) {
                 endGame('clear');
             }
         }
@@ -728,25 +871,24 @@
             if (type === 'over' || type === 'timeout') {
                 gameOverOverlay.style.display = 'flex';
                 document.getElementById('over-title').innerText = type === 'over' ? "CRASH!" : "TIME UP!";
-                document.getElementById('game-over-msg').innerHTML = `The run ended at <b>LVL ${currentLevel}</b>.<br>Total Score: ${Math.floor(score)}`;
+                document.getElementById('game-over-msg').innerHTML = `Run ended at <b>LVL ${currentLevel}</b> in ${currentGameMode.toUpperCase()} mode.<br>Total Score: ${Math.floor(score)}`;
                 container.style.animation = 'shake 0.4s';
             } else {
                 gameClearOverlay.style.display = 'flex';
                 showStars();
-                const levelPoints = Math.floor(timeLeft * 20 * (1 + currentLevel/10));
+                const levelPoints = currentGameMode === 'zen' ? 100 : Math.floor(timeLeft * 20 * (1 + currentLevel/10));
                 score += levelPoints;
                 document.getElementById('level-score-msg').innerText = `+${levelPoints} Points`;
                 scoreDisplay.innerText = `SCORE: ${Math.floor(score)}`;
                 
-                if (currentLevel > bestLevel) {
-                    bestLevel = currentLevel;
-                    bestScoreLabel.innerText = `Record: LVL ${bestLevel}`;
+                if (currentLevel > records[currentGameMode]) {
+                    records[currentGameMode] = currentLevel;
+                    localStorage.setItem('btn_records', JSON.stringify(records));
                 }
 
                 player.style.boxShadow = '0 0 30px var(--goal-color)';
                 player.style.backgroundColor = '#fff';
                 player.style.color = '#4ecdc4';
-                
                 spawnParticles();
             }
         }
@@ -777,13 +919,17 @@
         function showStars() {
             const perc = (timeLeft / totalTime);
             document.querySelectorAll('.star').forEach(s => s.classList.remove('filled'));
+            if (currentGameMode === 'zen') {
+                document.getElementById('star-1').classList.add('filled');
+                return;
+            }
             setTimeout(() => document.getElementById('star-1').classList.add('filled'), 200);
             if (perc > 0.4) setTimeout(() => document.getElementById('star-2').classList.add('filled'), 400);
             if (perc > 0.7) setTimeout(() => document.getElementById('star-3').classList.add('filled'), 600);
         }
 
         player.addEventListener('pointerdown', (e) => {
-            if (isGameOver) return;
+            if (isGameOver || !isStarted) return;
             isDragging = true;
             player.setPointerCapture(e.pointerId);
             player.classList.add('wobble');
@@ -810,11 +956,19 @@
             player.classList.remove('wobble');
         });
 
-        function restartGame() { currentLevel = 1; score = 0; init(); }
-        function nextLevel() { currentLevel++; init(); }
-        function resetToLevelOne() { restartGame(); }
+        function nextLevel() {
+            currentLevel++;
+            init();
+        }
 
-        window.onload = init;
+        function restartGame() {
+            currentLevel = 1;
+            score = 0;
+            init();
+        }
+
+        window.onresize = () => { if(isStarted && !isGameOver) init(); };
+        window.onload = updateBestDisplay;
     </script>
 </body>
 </html>
